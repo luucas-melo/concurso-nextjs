@@ -1,0 +1,67 @@
+// Prisma Schema for ConcursoTrack
+// Using PostgreSQL via Supabase
+// Configuration moved to prisma.config.ts (Prisma v7+)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// User Profile
+// Linked to Supabase auth.users table
+model Profile {
+  id        String   @id @db.Uuid
+  email     String   @unique
+  fullName  String?  @map("full_name")
+  avatarUrl String?  @map("avatar_url")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  exams Exam[]
+
+  @@map("profiles")
+}
+
+// Exam - Brazilian Public Exam Tracking
+model Exam {
+  id                     String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  userId                 String    @map("user_id") @db.Uuid
+  
+  // Basic Information
+  name                   String
+  publicBody             String    @map("public_body")
+  position               String
+  examBoard              String?   @map("exam_board")
+  city                   String?
+  state                  String?
+  
+  // Status: waiting, registered, taken, approved, rejected
+  status                 String    @default("waiting")
+  
+  // Important Dates
+  registrationOpen       DateTime? @map("registration_open") @db.Date
+  registrationDeadline   DateTime? @map("registration_deadline") @db.Date
+  paymentDeadline        DateTime? @map("payment_deadline") @db.Date
+  examDate               DateTime? @map("exam_date") @db.Date
+  resultsDate            DateTime? @map("results_date") @db.Date
+  
+  // Documents checklist (stored as JSON array)
+  documents              Json      @default("[]")
+  
+  // Metadata
+  createdAt              DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  profile Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+  @@index([examDate])
+  @@index([createdAt(sort: Desc)])
+  @@map("exams")
+}
