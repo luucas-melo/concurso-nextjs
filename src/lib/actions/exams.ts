@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { prisma } from "@/lib/prisma";
+import { createClient } from "@/lib/supabase/server"; // Keep for auth
 import { examSchema } from "@/lib/schemas/exam";
 import type { ExamInput } from "@/lib/schemas/exam";
 
@@ -22,7 +23,7 @@ export async function createExam(data: ExamInput) {
 
   const supabase = await createClient();
 
-  // Get current user
+  // Get current user (using Supabase Auth)
   const {
     data: { user },
     error: userError,
@@ -34,30 +35,57 @@ export async function createExam(data: ExamInput) {
     };
   }
 
-  // Insert exam into database
-  const { error } = await supabase.from("exams").insert({
-    ...validatedFields.data,
-    user_id: user.id,
-    // Convert empty strings to null for optional fields
-    exam_board: validatedFields.data.examBoard || null,
-    city: validatedFields.data.city || null,
-    state: validatedFields.data.state || null,
-    registration_open: validatedFields.data.registrationOpen || null,
-    registration_deadline: validatedFields.data.registrationDeadline || null,
-    payment_deadline: validatedFields.data.paymentDeadline || null,
-    exam_date: validatedFields.data.examDate || null,
-    results_date: validatedFields.data.resultsDate || null,
-  });
+  try {
+    // Ensure profile exists using Prisma upsert
+    await prisma.profile.upsert({
+      where: { id: user.id },
+      create: {
+        id: user.id,
+        email: user.email || "",
+        fullName: user.user_metadata?.full_name || null,
+        avatarUrl: user.user_metadata?.avatar_url || null,
+      },
+      update: {}, // Do nothing if exists
+    });
 
-  if (error) {
+    // Insert exam using Prisma
+    await prisma.exam.create({
+      data: {
+        userId: user.id,
+        name: validatedFields.data.name,
+        publicBody: validatedFields.data.publicBody,
+        position: validatedFields.data.position,
+        examBoard: validatedFields.data.examBoard || null,
+        city: validatedFields.data.city || null,
+        state: validatedFields.data.state || null,
+        status: validatedFields.data.status || "waiting",
+        registrationOpen: validatedFields.data.registrationOpen
+          ? new Date(validatedFields.data.registrationOpen)
+          : null,
+        registrationDeadline: validatedFields.data.registrationDeadline
+          ? new Date(validatedFields.data.registrationDeadline)
+          : null,
+        paymentDeadline: validatedFields.data.paymentDeadline
+          ? new Date(validatedFields.data.paymentDeadline)
+          : null,
+        examDate: validatedFields.data.examDate
+          ? new Date(validatedFields.data.examDate)
+          : null,
+        resultsDate: validatedFields.data.resultsDate
+          ? new Date(validatedFields.data.resultsDate)
+          : null,
+        documents: validatedFields.data.documents || [],
+      },
+    });
+
+    revalidatePath("/dashboard/exams");
+    redirect("/dashboard/exams");
+  } catch (error) {
     console.error("Error creating exam:", error);
     return {
       error: "Erro ao criar concurso. Tente novamente.",
     };
   }
-
-  revalidatePath("/dashboard/exams");
-  redirect("/dashboard/exams");
 }
 
 /**
@@ -76,7 +104,7 @@ export async function updateExam(id: string, data: ExamInput) {
 
   const supabase = await createClient();
 
-  // Get current user
+  // Get current user (using Supabase Auth)
   const {
     data: { user },
     error: userError,
@@ -88,38 +116,61 @@ export async function updateExam(id: string, data: ExamInput) {
     };
   }
 
-  // Update exam (RLS will ensure user can only update their own exams)
-  const { error } = await supabase
-    .from("exams")
-    .update({
-      ...validatedFields.data,
-      exam_board: validatedFields.data.examBoard || null,
-      city: validatedFields.data.city || null,
-      state: validatedFields.data.state || null,
-      registration_open: validatedFields.data.registrationOpen || null,
-      registration_deadline: validatedFields.data.registrationDeadline || null,
-      payment_deadline: validatedFields.data.paymentDeadline || null,
-      exam_date: validatedFields.data.examDate || null,
-      results_date: validatedFields.data.resultsDate || null,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", id)
-    .eq("user_id", user.id);
+  try {
+    // Update exam using Prisma (with ownership check)
+    const updated = await prisma.exam.updateMany({
+      where: {
+        id: id,
+        userId: user.id, // Ensures user ownership
+      },
+      data: {
+        name: validatedFields.data.name,
+        publicBody: validatedFields.data.publicBody,
+        position: validatedFields.data.position,
+        examBoard: validatedFields.data.examBoard || null,
+        city: validatedFields.data.city || null,
+        state: validatedFields.data.state || null,
+        status: validatedFields.data.status || "waiting",
+        registrationOpen: validatedFields.data.registrationOpen
+          ? new Date(validatedFields.data.registrationOpen)
+          : null,
+        registrationDeadline: validatedFields.data.registrationDeadline
+          ? new Date(validatedFields.data.registrationDeadline)
+          : null,
+        paymentDeadline: validatedFields.data.paymentDeadline
+          ? new Date(validatedFields.data.paymentDeadline)
+          : null,
+        examDate: validatedFields.data.examDate
+          ? new Date(validatedFields.data.examDate)
+          : null,
+        resultsDate: validatedFields.data.resultsDate
+          ? new Date(validatedFields.data.resultsDate)
+          : null,
+        documents: validatedFields.data.documents || [],
+        // updatedAt handled automatically by Prisma @updatedAt
+      },
+    });
 
-  if (error) {
+    // Check if any record was updated
+    if (updated.count === 0) {
+      return {
+        error: "Concurso não encontrado ou você não tem permissão.",
+      };
+    }
+
+    revalidatePath("/dashboard/exams");
+    revalidatePath(`/dashboard/exams/${id}`);
+
+    return {
+      success: true,
+      message: "Concurso atualizado com sucesso!",
+    };
+  } catch (error) {
     console.error("Error updating exam:", error);
     return {
       error: "Erro ao atualizar concurso. Tente novamente.",
     };
   }
-
-  revalidatePath("/dashboard/exams");
-  revalidatePath(`/dashboard/exams/${id}`);
-  
-  return {
-    success: true,
-    message: "Concurso atualizado com sucesso!",
-  };
 }
 
 /**
@@ -128,7 +179,7 @@ export async function updateExam(id: string, data: ExamInput) {
 export async function deleteExam(id: string) {
   const supabase = await createClient();
 
-  // Get current user
+  // Get current user (using Supabase Auth)
   const {
     data: { user },
     error: userError,
@@ -140,26 +191,34 @@ export async function deleteExam(id: string) {
     };
   }
 
-  // Delete exam (RLS will ensure user can only delete their own exams)
-  const { error } = await supabase
-    .from("exams")
-    .delete()
-    .eq("id", id)
-    .eq("user_id", user.id);
+  try {
+    // Delete exam using Prisma (with ownership check)
+    const deleted = await prisma.exam.deleteMany({
+      where: {
+        id: id,
+        userId: user.id, // Ensures user ownership
+      },
+    });
 
-  if (error) {
+    // Check if any record was deleted
+    if (deleted.count === 0) {
+      return {
+        error: "Concurso não encontrado ou você não tem permissão.",
+      };
+    }
+
+    revalidatePath("/dashboard/exams");
+
+    return {
+      success: true,
+      message: "Concurso excluído com sucesso!",
+    };
+  } catch (error) {
     console.error("Error deleting exam:", error);
     return {
       error: "Erro ao excluir concurso. Tente novamente.",
     };
   }
-
-  revalidatePath("/dashboard/exams");
-  
-  return {
-    success: true,
-    message: "Concurso excluído com sucesso!",
-  };
 }
 
 /**
@@ -168,7 +227,7 @@ export async function deleteExam(id: string) {
 export async function updateExamStatus(id: string, status: string) {
   const supabase = await createClient();
 
-  // Get current user
+  // Get current user (using Supabase Auth)
   const {
     data: { user },
     error: userError,
@@ -180,44 +239,52 @@ export async function updateExamStatus(id: string, status: string) {
     };
   }
 
-  // Update status
-  const { error } = await supabase
-    .from("exams")
-    .update({ 
-      status,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", id)
-    .eq("user_id", user.id);
+  try {
+    // Update status using Prisma
+    const updated = await prisma.exam.updateMany({
+      where: {
+        id: id,
+        userId: user.id,
+      },
+      data: {
+        status,
+        // updatedAt handled automatically by @updatedAt
+      },
+    });
 
-  if (error) {
+    if (updated.count === 0) {
+      return {
+        error: "Concurso não encontrado ou você não tem permissão.",
+      };
+    }
+
+    revalidatePath("/dashboard/exams");
+    revalidatePath(`/dashboard/exams/${id}`);
+    revalidatePath("/dashboard");
+
+    return {
+      success: true,
+      message: "Status atualizado com sucesso!",
+    };
+  } catch (error) {
     console.error("Error updating exam status:", error);
     return {
       error: "Erro ao atualizar status. Tente novamente.",
     };
   }
-
-  revalidatePath("/dashboard/exams");
-  revalidatePath(`/dashboard/exams/${id}`);
-  revalidatePath("/dashboard");
-  
-  return {
-    success: true,
-    message: "Status atualizado com sucesso!",
-  };
 }
 
 /**
- * Toggle document checked status
+ * Toggle document completed status
  */
 export async function toggleDocumentChecked(
   examId: string,
   documentName: string,
-  checked: boolean
+  isCompleted: boolean
 ) {
   const supabase = await createClient();
 
-  // Get current user
+  // Get current user (using Supabase Auth)
   const {
     data: { user },
     error: userError,
@@ -229,48 +296,52 @@ export async function toggleDocumentChecked(
     };
   }
 
-  // Get current exam
-  const { data: exam, error: fetchError } = await supabase
-    .from("exams")
-    .select("documents")
-    .eq("id", examId)
-    .eq("user_id", user.id)
-    .single();
+  try {
+    // Fetch current exam with Prisma
+    const exam = await prisma.exam.findFirst({
+      where: {
+        id: examId,
+        userId: user.id,
+      },
+      select: {
+        documents: true,
+      },
+    });
 
-  if (fetchError || !exam) {
+    if (!exam) {
+      return {
+        error: "Concurso não encontrado.",
+      };
+    }
+
+    // Update documents array
+    const documents = Array.isArray(exam.documents) ? exam.documents : [];
+    const updatedDocuments = documents.map((doc: any) =>
+      doc.name === documentName ? { ...doc, isCompleted } : doc
+    );
+
+    // Update exam with new documents array
+    await prisma.exam.update({
+      where: {
+        id: examId,
+      },
+      data: {
+        documents: updatedDocuments,
+        // updatedAt handled automatically
+      },
+    });
+
+    revalidatePath(`/dashboard/exams/${examId}`);
+
     return {
-      error: "Concurso não encontrado.",
+      success: true,
     };
-  }
-
-  // Update documents array
-  const documents = exam.documents || [];
-  const updatedDocuments = documents.map((doc: any) =>
-    doc.name === documentName ? { ...doc, checked } : doc
-  );
-
-  // Update exam
-  const { error } = await supabase
-    .from("exams")
-    .update({
-      documents: updatedDocuments,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", examId)
-    .eq("user_id", user.id);
-
-  if (error) {
+  } catch (error) {
     console.error("Error updating document:", error);
     return {
       error: "Erro ao atualizar documento. Tente novamente.",
     };
   }
-
-  revalidatePath(`/dashboard/exams/${examId}`);
-  
-  return {
-    success: true,
-  };
 }
 
 /**
@@ -279,6 +350,7 @@ export async function toggleDocumentChecked(
 export async function getUserExams() {
   const supabase = await createClient();
 
+  // Get current user (using Supabase Auth)
   const {
     data: { user },
     error: userError,
@@ -288,18 +360,22 @@ export async function getUserExams() {
     return { data: null, error: "Não autenticado" };
   }
 
-  const { data, error } = await supabase
-    .from("exams")
-    .select("*")
-    .eq("user_id", user.id)
-    .order("created_at", { ascending: false });
+  try {
+    // Fetch exams using Prisma
+    const exams = await prisma.exam.findMany({
+      where: {
+        userId: user.id,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
 
-  if (error) {
+    return { data: exams, error: null };
+  } catch (error) {
     console.error("Error fetching exams:", error);
     return { data: null, error: "Erro ao buscar concursos" };
   }
-
-  return { data, error: null };
 }
 
 /**
@@ -308,6 +384,7 @@ export async function getUserExams() {
 export async function getExamById(id: string) {
   const supabase = await createClient();
 
+  // Get current user (using Supabase Auth)
   const {
     data: { user },
     error: userError,
@@ -317,17 +394,22 @@ export async function getExamById(id: string) {
     return { data: null, error: "Não autenticado" };
   }
 
-  const { data, error } = await supabase
-    .from("exams")
-    .select("*")
-    .eq("id", id)
-    .eq("user_id", user.id)
-    .single();
+  try {
+    // Fetch single exam using Prisma
+    const exam = await prisma.exam.findFirst({
+      where: {
+        id: id,
+        userId: user.id,
+      },
+    });
 
-  if (error) {
+    if (!exam) {
+      return { data: null, error: "Concurso não encontrado" };
+    }
+
+    return { data: exam, error: null };
+  } catch (error) {
     console.error("Error fetching exam:", error);
     return { data: null, error: "Concurso não encontrado" };
   }
-
-  return { data, error: null };
 }

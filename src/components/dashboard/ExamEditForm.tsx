@@ -30,8 +30,10 @@ import {
 import { toast } from "sonner";
 import { updateExam, deleteExam } from "@/lib/actions/exams";
 import { examSchema, brazilianStateEnum } from "@/lib/schemas/exam";
-import type { ExamInput } from "@/lib/schemas/exam";
-
+import type { ExamInput, DocumentItem } from "@/lib/schemas/exam";
+import type { Exam } from "@/types/exam";
+import * as z from "zod";
+import { ExamStatus } from "@prisma/client";
 const BRAZILIAN_STATES = brazilianStateEnum.options;
 
 const STATUS_LABELS = {
@@ -51,47 +53,61 @@ const DEFAULT_DOCUMENTS = [
 ];
 
 interface ExamEditFormProps {
-  exam: any;
+  exam: Exam;
 }
+
+// Helper to format Date to YYYY-MM-DD string for date input
+// function formatDateForInput(date: Date | null | undefined): string {
+//   if (!date) return "";
+//   const d = new Date(date);
+//   if (isNaN(d.getTime())) return "";
+//   return d.toISOString().split("T")[0];
+// }
 
 export default function ExamEditForm({ exam }: ExamEditFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [isDeleting, setIsDeleting] = useState(false);
-  const [documents, setDocuments] = useState<string[]>(
+  const [documents, setDocuments] = useState<DocumentItem[]>(
     Array.isArray(exam.documents) ? exam.documents : []
   );
   const [newDocument, setNewDocument] = useState("");
 
   // Use react-hook-form with Zod validation
-  const form = useForm<ExamInput>({
+  const form = useForm<Exam>({
     resolver: zodResolver(examSchema),
     defaultValues: {
       name: exam.name || "",
-      publicBody: exam.public_body || "",
+      publicBody: exam.publicBody || "",
       position: exam.position || "",
-      examBoard: exam.exam_board || "",
+      examBoard: exam.examBoard || "",
       city: exam.city || "",
       state: exam.state || null,
-      status: exam.status || "waiting",
-      registrationOpen: exam.registration_open || "",
-      registrationDeadline: exam.registration_deadline || "",
-      paymentDeadline: exam.payment_deadline || "",
-      examDate: exam.exam_date || "",
-      resultsDate: exam.results_date || "",
+      status: (exam.status as ExamStatus) || "waiting",
+      registrationOpen: exam?.registrationOpen,
+      registrationDeadline: exam?.registrationDeadline,
+      paymentDeadline: exam?.paymentDeadline,
+      examDate: exam?.examDate,
+      resultsDate: exam?.resultsDate,
       documents: [],
     },
   });
 
   const handleAddDocument = () => {
-    if (newDocument.trim() && !documents.includes(newDocument.trim())) {
-      setDocuments((prev) => [...prev, newDocument.trim()]);
+    if (
+      newDocument.trim() &&
+      !documents.some((d) => d.name === newDocument.trim())
+    ) {
+      setDocuments((prev) => [
+        ...prev,
+        { name: newDocument.trim(), isCompleted: false },
+      ]);
       setNewDocument("");
     }
   };
 
-  const handleRemoveDocument = (doc: string) => {
-    setDocuments((prev) => prev.filter((d) => d !== doc));
+  const handleRemoveDocument = (docName: string) => {
+    setDocuments((prev) => prev.filter((d) => d.name !== docName));
   };
 
   const onSubmit = async (data: ExamInput) => {
@@ -379,13 +395,13 @@ export default function ExamEditForm({ exam }: ExamEditFormProps) {
           <div className="flex flex-wrap gap-2">
             {documents.map((doc) => (
               <div
-                key={doc}
+                key={doc.name}
                 className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-secondary text-sm"
               >
-                <span>{doc}</span>
+                <span>{doc.name}</span>
                 <button
                   type="button"
-                  onClick={() => handleRemoveDocument(doc)}
+                  onClick={() => handleRemoveDocument(doc.name)}
                   className="text-muted-foreground hover:text-destructive transition-colors"
                 >
                   <X className="w-4 h-4" />

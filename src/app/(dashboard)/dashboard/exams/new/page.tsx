@@ -19,7 +19,7 @@ import {
 import { toast } from "sonner";
 import { createExam } from "@/lib/actions/exams";
 import { examSchema, brazilianStateEnum } from "@/lib/schemas/exam";
-import type { ExamInput } from "@/lib/schemas/exam";
+import type { ExamInput, DocumentItem } from "@/lib/schemas/exam";
 
 const BRAZILIAN_STATES = brazilianStateEnum.options;
 
@@ -47,8 +47,8 @@ const DEFAULT_DOCUMENTS = [
 export default function NewExamPage() {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [documents, setDocuments] = useState<string[]>(
-    DEFAULT_DOCUMENTS.slice(0, 5)
+  const [documents, setDocuments] = useState<DocumentItem[]>(
+    DEFAULT_DOCUMENTS.slice(0, 5).map((name) => ({ name, isCompleted: false }))
   );
   const [newDocument, setNewDocument] = useState("");
 
@@ -73,14 +73,17 @@ export default function NewExamPage() {
   });
 
   const handleAddDocument = () => {
-    if (newDocument.trim() && !documents.includes(newDocument.trim())) {
-      setDocuments((prev) => [...prev, newDocument.trim()]);
+    if (newDocument.trim() && !documents.some((d) => d.name === newDocument.trim())) {
+      setDocuments((prev) => [
+        ...prev,
+        { name: newDocument.trim(), isCompleted: false },
+      ]);
       setNewDocument("");
     }
   };
 
-  const handleRemoveDocument = (doc: string) => {
-    setDocuments((prev) => prev.filter((d) => d !== doc));
+  const handleRemoveDocument = (docName: string) => {
+    setDocuments((prev) => prev.filter((d) => d.name !== docName));
   };
 
   const onSubmit = async (data: ExamInput) => {
@@ -330,13 +333,13 @@ export default function NewExamPage() {
           <div className="flex flex-wrap gap-2">
             {documents.map((doc) => (
               <div
-                key={doc}
+                key={doc.name}
                 className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-secondary text-sm"
               >
-                <span>{doc}</span>
+                <span>{doc.name}</span>
                 <button
                   type="button"
-                  onClick={() => handleRemoveDocument(doc)}
+                  onClick={() => handleRemoveDocument(doc.name)}
                   className="text-muted-foreground hover:text-destructive transition-colors"
                 >
                   <X className="w-4 h-4" />
@@ -347,10 +350,10 @@ export default function NewExamPage() {
 
           <p className="text-xs text-muted-foreground">
             Sugestões:{" "}
-            {DEFAULT_DOCUMENTS.filter((d) => !documents.includes(d))
+            {DEFAULT_DOCUMENTS.filter((d) => !documents.some((doc) => doc.name === d))
               .slice(0, 3)
               .join(", ")}
-            {DEFAULT_DOCUMENTS.filter((d) => !documents.includes(d)).length >
+            {DEFAULT_DOCUMENTS.filter((d) => !documents.some((doc) => doc.name === d)).length >
               3 && "..."}
           </p>
         </div>

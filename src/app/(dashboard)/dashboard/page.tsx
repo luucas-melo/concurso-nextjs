@@ -3,6 +3,7 @@ import { getUserExams } from "@/lib/actions/exams";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Plus, FileText, Calendar, CheckCircle } from "lucide-react";
+import { STATUS_LABELS } from "@/types/exam";
 
 export const metadata: Metadata = {
   title: "Dashboard - ConcursoTrack",
@@ -95,11 +96,11 @@ export default async function DashboardPage() {
                   <div>
                     <h3 className="font-semibold mb-1">{exam.name}</h3>
                     <p className="text-sm text-muted-foreground">
-                      {exam.public_body} - {exam.position}
+                      {exam.publicBody} - {exam.position}
                     </p>
                   </div>
                   <span className={`status-badge status-${exam.status}`}>
-                    {exam.status}
+                    {STATUS_LABELS[exam.status]}
                   </span>
                 </div>
               </Link>

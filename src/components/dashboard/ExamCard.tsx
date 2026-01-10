@@ -10,13 +10,13 @@ interface ExamCardProps {
 }
 
 const ExamCard = ({ exam }: ExamCardProps) => {
-  const getStatusClass = (status: Exam['status']) => {
+  const getStatusClass = (status: Exam["status"]) => {
     const classes = {
-      waiting: 'status-waiting',
-      registered: 'status-registered',
-      taken: 'status-taken',
-      approved: 'status-approved',
-      rejected: 'status-rejected',
+      waiting: "status-waiting",
+      registered: "status-registered",
+      taken: "status-taken",
+      approved: "status-approved",
+      rejected: "status-rejected",
     };
     return classes[status];
   };
@@ -24,13 +24,21 @@ const ExamCard = ({ exam }: ExamCardProps) => {
   const getNextImportantDate = () => {
     const now = new Date();
     const dates = [
-      { key: 'registrationDeadline', label: 'Inscrição encerra', date: exam.dates.registrationDeadline },
-      { key: 'paymentDeadline', label: 'Pagamento vence', date: exam.dates.paymentDeadline },
-      { key: 'examDate', label: 'Data da prova', date: exam.dates.examDate },
-      { key: 'resultsDate', label: 'Resultado', date: exam.dates.resultsDate },
+      {
+        key: "registrationDeadline",
+        label: "Inscrição encerra",
+        date: exam.registrationDeadline,
+      },
+      {
+        key: "paymentDeadline",
+        label: "Pagamento vence",
+        date: exam.paymentDeadline,
+      },
+      { key: "examDate", label: "Data da prova", date: exam.examDate },
+      { key: "resultsDate", label: "Resultado", date: exam.resultsDate },
     ];
 
-    const futureDate = dates.find(d => d.date && d.date > now);
+    const futureDate = dates.find((d) => d.date && d.date > now);
     if (!futureDate?.date) return null;
 
     const daysLeft = differenceInDays(futureDate.date, now);
@@ -39,7 +47,7 @@ const ExamCard = ({ exam }: ExamCardProps) => {
 
   const nextDate = getNextImportantDate();
 
-  const completedDocs = exam.documents.filter(d => d.isCompleted).length;
+  const completedDocs = exam.documents?.filter((d) => d.isCompleted).length;
   const totalDocs = exam.documents.length;
   const docsProgress = totalDocs > 0 ? (completedDocs / totalDocs) * 100 : 0;
 
@@ -68,7 +76,9 @@ const ExamCard = ({ exam }: ExamCardProps) => {
           </div>
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <MapPin className="w-4 h-4" />
-            <span>{exam.city}, {exam.state}</span>
+            <span>
+              {exam.city}, {exam.state}
+            </span>
           </div>
         </div>
 
@@ -79,18 +89,27 @@ const ExamCard = ({ exam }: ExamCardProps) => {
                 <Calendar className="w-4 h-4 text-primary" />
                 <span className="text-sm font-medium">{nextDate.label}</span>
               </div>
-              <span className={cn(
-                "text-sm font-semibold",
-                nextDate.daysLeft <= 3 ? "text-destructive" :
-                nextDate.daysLeft <= 7 ? "text-warning" : "text-foreground"
-              )}>
-                {nextDate.daysLeft === 0 ? "Hoje!" :
-                 nextDate.daysLeft === 1 ? "Amanhã" :
-                 `${nextDate.daysLeft} dias`}
+              <span
+                className={cn(
+                  "text-sm font-semibold",
+                  nextDate.daysLeft <= 3
+                    ? "text-destructive"
+                    : nextDate.daysLeft <= 7
+                    ? "text-warning"
+                    : "text-foreground"
+                )}
+              >
+                {nextDate.daysLeft === 0
+                  ? "Hoje!"
+                  : nextDate.daysLeft === 1
+                  ? "Amanhã"
+                  : `${nextDate.daysLeft} dias`}
               </span>
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              {format(nextDate.date!, "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
+              {format(nextDate.date!, "dd 'de' MMMM 'de' yyyy", {
+                locale: ptBR,
+              })}
             </p>
           </div>
         )}
@@ -99,7 +118,9 @@ const ExamCard = ({ exam }: ExamCardProps) => {
         <div className="space-y-2">
           <div className="flex items-center justify-between text-sm">
             <span className="text-muted-foreground">Documentos</span>
-            <span className="font-medium">{completedDocs}/{totalDocs}</span>
+            <span className="font-medium">
+              {completedDocs}/{totalDocs}
+            </span>
           </div>
           <div className="h-2 bg-secondary rounded-full overflow-hidden">
             <div

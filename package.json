@@ -16,6 +16,7 @@
     "prisma:pull": "prisma db pull",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
+    "prisma:seed": "tsx prisma/seed.ts",
     "db:types": "npx supabase gen types typescript --project-id \"$PROJECT_ID\" --schema public > src/types/database.ts",
     "db:push": "echo 'Copy supabase-schema.sql and run in Supabase SQL Editor'",
     "db:status": "node scripts/check-db.js",
@@ -24,6 +25,7 @@
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
+    "@prisma/adapter-pg": "^7.2.0",
     "@prisma/client": "^7.2.0",
     "@radix-ui/react-accordion": "^1.2.12",
     "@radix-ui/react-alert-dialog": "^1.1.15",
@@ -70,6 +72,7 @@
     "eslint-config-next": "16.1.1",
     "prisma": "^7.2.0",
     "tailwindcss": "^4",
+    "tsx": "^4.21.0",
     "typescript": "^5"
   }
 }
